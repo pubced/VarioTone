@@ -1,6 +1,15 @@
 #pragma once
 
 #include "VarioConfig.h"
+#include "VarioModel.h"
+#include "VarioSynth.h"
+#include "VarioOutput.h"
+
+enum class VarioMode {
+    FLIGHT,     // rapide type LXNav
+    THERMAL,    // mix
+    HOME        // lent domotique
+};
 
 class VarioTone {
 public:
@@ -9,17 +18,19 @@ public:
     void begin();
     void update(float value);
 
+    void setMode(VarioMode mode);
     void setConfig(const VarioConfig& cfg);
-    VarioConfig& getConfig();
+
+    void setVolume(float v);
 
 private:
     VarioConfig config;
 
-    float filteredValue = 0.0f;
-    float lastFiltered = 0.0f;
+    VarioModel model;
+    VarioSynth synth;
+    VarioOutput output;
 
-    unsigned long lastTime = 0;
+    VarioMode mode;
 
-    float computeRate(float value, float dt);
-    float filter(float value, float dt);
+    float adaptRate(float rawRate);
 };

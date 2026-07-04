@@ -5,12 +5,7 @@ VarioTone vario;
 void setup() {
     Serial.begin(115200);
     vario.begin();
-
-    VarioConfig cfg;
-    cfg.timeConstant = 30.0f; // parfait pour température maison
-    cfg.scale = 1.0f;
-
-    vario.setConfig(cfg);
+    vario.setMode(VarioMode::HOME);
 }
 
 void loop() {

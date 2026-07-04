@@ -4,47 +4,91 @@
 VarioTone::VarioTone() {}
 
 void VarioTone::begin() {
-    lastTime = millis();
-    filteredValue = 0;
-    lastFiltered = 0;
+
+    model.begin(config);
+    synth.begin(SynthMode::PWM);
+    output.begin(OutputMode::PWM);
+
+    mode = VarioMode::HOME;
 }
 
 void VarioTone::setConfig(const VarioConfig& cfg) {
     config = cfg;
+
+    model.begin(cfg);
 }
 
-VarioConfig& VarioTone::getConfig() {
-    return config;
+void VarioTone::setVolume(float v) {
+    synth.setVolume(v);
 }
 
-float VarioTone::filter(float value, float dt) {
-    float alpha = dt / (config.timeConstant + dt);
-    filteredValue += alpha * (value - filteredValue);
-    return filteredValue;
+void VarioTone::setMode(VarioMode m) {
+    mode = m;
+
+    switch (mode) {
+
+        case VarioMode::FLIGHT:
+            config.timeConstant = 1.0f;
+            config.scale = 2.0f;
+            break;
+
+        case VarioMode::THERMAL:
+            config.timeConstant = 10.0f;
+            config.scale = 0.5f;
+            break;
+
+        case VarioMode::HOME:
+            config.timeConstant = 60.0f;
+            config.scale = 0.2f;
+            break;
+    }
+
+    model.begin(config);
 }
 
-float VarioTone::computeRate(float value, float dt) {
-    float rate = (value - lastFiltered) / dt;
-    lastFiltered = value;
-    return rate;
+float VarioTone::adaptRate(float rawRate) {
+    return rawRate * config.scale;
 }
 
 void VarioTone::update(float value) {
-    unsigned long now = millis();
-    float dt = (now - lastTime) / 1000.0f;
-    if (dt <= 0) return;
 
-    lastTime = now;
+    // =========================
+    // 1. MODEL (physique → audio)
+    // =========================
 
-    float f = filter(value, dt);
-    float rate = computeRate(f, dt);
+    VarioAudioState state = model.process(value);
 
-    // zone morte
-    if (fabs(rate) < config.deadband) {
-        rate = 0;
+    // =========================
+    // 2. ADAPTATION MODE
+    // =========================
+
+    switch (mode) {
+
+        case VarioMode::HOME:
+            // amortissement supplémentaire (très lent)
+            state.duty *= 0.6f;
+            break;
+
+        case VarioMode::THERMAL:
+            // équilibré
+            state.duty *= 0.85f;
+            break;
+
+        case VarioMode::FLIGHT:
+            // plus nerveux
+            state.duty *= 1.0f;
+            break;
     }
 
-    // TODO commit #0002 :
-    // - mapping rate -> audio level
-    // - synthèse sonore
+    // =========================
+    // 3. SYNTHÈSE SONORE
+    // =========================
+
+    synth.update(state);
+
+    // =========================
+    // 4. SORTIE AUDIO
+    // =========================
+
+    // (le synth écrit déjà dans output via PWM/I2S dans #0004)
 }
